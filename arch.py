@@ -8,21 +8,23 @@ import ccxt
 import talib
 import requests
 import pandas as pd
+import simplejson as json
+
 
 class LineNotify():
     def __init__(self):
         self.key = self.read_setting()
-        self.header =  {'Authorization': 'Bearer '+ key ,'Connection':'close'}
+        self.header =  {'Authorization': 'Bearer '+ self.key ,'Connection':'close'}
         self.link = "https://notify-api.line.me/api/notify"
 
-    def read_setting():
+    def read_setting(self):
         with open('setting.json') as json_file:
             setting_data = json.load(json_file)
-            self.key = setting_data['LineKey']
+            return setting_data['LineKey']
 
     def send_alert(self,msg:str):
         try:
-            push = requests.post(self.link,data ={'message': msg},headers=self.header)
+            r = requests.post(self.link,data ={'message': msg},headers=self.header)
         except Exception as e:
                 if hasattr(e, 'message'):
                     print("ERROR : " + str(datetime.datetime.now())+"\t"+"send alert:"+str(e.message))
@@ -42,6 +44,7 @@ class BitmexFetcher(LineNotify):
     __error_hold = 60  #  seconds
 
     def __init__(self, trading_pair: str, k_line: str,backdays:int):
+        super().__init__()
         self.trading_pair = trading_pair
         self.k_line = k_line
         self.data = pd.DataFrame()
@@ -67,8 +70,8 @@ class BitmexFetcher(LineNotify):
 
     def update_data(self,last_timestamp:int):
         ''' fetch new data and push new data to dataframe '''
-        upper_bound = 1200
-        lower_bound = 400
+        upper_bound = 3000
+        lower_bound = 1000
 
         if len(self.data.index) > upper_bound :
             remove_count = upper_bound-lower_bound
@@ -117,7 +120,7 @@ class BitmexFetcher(LineNotify):
                     raw_data += ohlcvs
 
             except (ccxt.ExchangeError, ccxt.AuthenticationError, ccxt.ExchangeNotAvailable, ccxt.RequestTimeout) as error:
-                msg = 'Fetch :　Got an error' + str(type(error).__name__,error.args) + ', retrying in' + str(self.__error_hold) + 'seconds...'
+                msg = 'Fetch :　Got an error' + str(type(error).__name__)+str(error.args) + ', retrying in' + str(self.__error_hold) + 'seconds...'
                 print(msg)
                 super(BitmexFetcher, self).send_alert(msg) 
                 time.sleep(self.__error_hold)
@@ -196,16 +199,18 @@ class OnTick(BitmexFetcher):
     
     def signal_match(self,singal:str,d,dsec:str):
         """ Buy & Sell singal alert """
-        print(d)
-        print(self.data.iloc[self.alert_last_K_count].date )
         if d > self.data.iloc[self.alert_last_K_count].date :
             __date_str = d.strftime("%m/%d %H:%M")
 
             if singal.lower()=="buy":
-                print("BUY", __date_str ,dsec)
+                msg = "BUY\n"+ __date_str + "\n" + dsec
+                print(msg)
+                super(BitmexFetcher, self).send_alert(msg) 
                 
             elif singal.lower()=="sell":
-                print("SELL", __date_str ,dsec)
+                msg = "SELL\n"+ __date_str + "\n" + dsec
+                print(msg)
+                super(BitmexFetcher, self).send_alert(msg) 
                 
             else :
                 pass
@@ -338,7 +343,8 @@ class OnTick(BitmexFetcher):
                 PrLo2 = self.data.low[i]
                 CFlag =-4
 
-
+    def kd_div():
+        pass
 
     def beforeOnBar():
         # 裡面放的是每個 Tick 都要做的事情，和 OnBar 比較沒有關係的
